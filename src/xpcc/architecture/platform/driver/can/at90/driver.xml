@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<!DOCTYPE rca SYSTEM "../../xml/driver.dtd">
+<rca version="1.0">
+	<driver type="can" name="at90">
+		<template>can.hpp.in</template>
+		<template>can.cpp.in</template>
+		<parameter name="tx_buffer" type="int" min="0" max="254">32</parameter>
+		<parameter name="rx_buffer" type="int" min="0" max="254">32</parameter>
+	</driver>
+</rca>

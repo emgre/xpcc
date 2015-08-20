@@ -97,12 +97,17 @@ MAIN_FUNCTION
 	Rd::setOutput(xpcc::Gpio::High);
 	WrInverted::setOutput(xpcc::Gpio::Low);
 
+	enableInterrupts();
+
 	XPCC_LOG_DEBUG   << "debug"   << xpcc::endl;
 	XPCC_LOG_INFO    << "info"    << xpcc::endl;
 	XPCC_LOG_WARNING << "warning" << xpcc::endl;
 	XPCC_LOG_ERROR   << "error"   << xpcc::endl;
 
-	uint16_t counter = 0;
+	xpcc::at90::Can::initialize<xpcc::avr::SystemClock>();
+	xpcc::at90::Can::can_filter_t filter = {0x000, 0x000};
+	xpcc::at90::Can::set_filter(0, filter);
+
 
 	while (1)
 	{
@@ -115,13 +120,34 @@ MAIN_FUNCTION
 		Led4Low::toggle();
 		Led4High::toggle();
 
-		XPCC_LOG_DEBUG << "This is debugging " << counter++ << xpcc::endl;
+		XPCC_LOG_DEBUG << "First free mob = " << xpcc::at90::Can::find_free_mob() << xpcc::endl;
 
-		uint8_t c;
-		if (MyFt::read(c)) {
-			Led5Low::toggle();
-			Led5High::toggle();
-			XPCC_LOG_DEBUG << "Received '" << c << "'" << xpcc::endl;
+		// Create a new message
+		// xpcc::can::Message message(0x22);
+		// message.length = 2;
+		// message.data[0] = 0xab;
+		// message.data[1] = 0xcd;
+
+		// xpcc::at90::Can::sendMessage(message);
+
+		if (xpcc::at90::Can::isMessageAvailable()) {
+			xpcc::can::Message msg;
+			if (xpcc::at90::Can::getMessage(msg)) {
+				XPCC_LOG_DEBUG << msg << xpcc::endl;
+			} else {
+				XPCC_LOG_DEBUG << "getMessage failed" << xpcc::endl;
+			}
 		}
+
+		// XPCC_LOG_DEBUG << "isMessageAvailable " << xpcc::at90::Can::isMessageAvailable() << xpcc::endl;
+
+		// XPCC_LOG_DEBUG << "This is debugging " << counter++ << xpcc::endl;
+
+		// uint8_t c;
+		// if (MyFt::read(c)) {
+		// 	Led5Low::toggle();
+		// 	Led5High::toggle();
+		// 	XPCC_LOG_DEBUG << "Received '" << c << "'" << xpcc::endl;
+		// }
 	}
 }
