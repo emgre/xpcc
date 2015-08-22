@@ -16,6 +16,7 @@
 #include "../../../type_ids.hpp"
 
 #include "../../clock/generic/common_clock.hpp"
+#include "error_code.hpp"
 
 using namespace xpcc::clock; // for MHzxx
 
@@ -33,89 +34,120 @@ namespace at90
 {
 
 /**
- * @brief		Basic Extended CAN{{ id }}
+ * CAN
  *
- * The Basic Extended CAN peripheral, named bxCAN, interfaces the CAN
- * network. It supports the CAN protocols version 2.0A and B. It has
- * been designed to manage a high number of incoming messages
- * efficiently with a minimum CPU load.
+ * The peripheral interfaces the CAN network. It supports the CAN protocols
+ * version 2.0A and B. There are 15 Message Objects (MOb) available for
+ * reception and transmission
  *
  * ## Filter
  *
- * For connectivity line devices there are 28 filter banks,
- * i=0 .. 27, in other devices there are 14 filter banks i = 0 ..13.
- *
- * The 28 filter banks for the connectivity line devices are
- * shared between CAN1 and CAN2.
  *
  * ## Configuration
  * You can set the buffer size using the `tx_buffer` and `rx_buffer` parameters.
  *
  * @author		Fabian Greif <fabian.greif@rwth-aachen.de>
+ * @author		<stronglytyp3d@gmail.com>
  * @ingroup		{{target.string}}_can
  */
 class Can : public ::xpcc::Can
 {
 public:
 	enum class
-	Mode : uint32_t
+	Mode : uint8_t
 	{
-		Normal		= 0,
-//		ListenOnly	= CAN_BTR_SILM,
-//		LoopBack	= CAN_BTR_LBKM,
-//		ListenOnlyLoopBack	= CAN_BTR_SILM | CAN_BTR_LBKM,
+		Normal,
+		ListenOnly,
 	};
 
 public:
 	/// TypeId used to connect GPIO pins to this peripheral's rx.
-//	static const TypeId::CanNRx Rx;
+	static const TypeId::CanRx Rx;
 	/// TypeId used to connect GPIO pins to this peripheral's tx.
-//	static const TypeId::CanNTx Tx;
+	static const TypeId::CanTx Tx;
 
 private:
-public:
-	/// Private Initializer with computed prescaler and timing constants
-	static void
-	initializeWithPrescaler(uint16_t prescaler, uint8_t bs1, uint8_t bs2,
-	uint32_t interruptPriority, Mode startupMode, bool overwriteOnOverrun);
-
-
 	/// get next free MOb
 	static uint8_t
 	find_free_mob(void);
 
-	/// disable interrupt of corresponding MOb
-	static void
-	disable_mob_interrupt(uint8_t mob);
-
-	/// enable interrupt of corresponding MOb
-	static void
-	enable_mob_interrupt(uint8_t mob);
-
-	/// enter standby mode => messages are not transmitted nor received
-	static void
-	enter_standby_mode();
-
-	/// leave standby mode => CAN Controller is connected to CAN Bus
-	static void
-	leave_standby_mode();
-
-
-	/// Copy data form a message in RAM to the actual registers
-	/// \warning this function assumes CANPAGE to be set properly before the call
-	static void
-	copy_message_to_mob(const xpcc::can::Message& msg);
-
-	static void
-	copy_mob_to_message(xpcc::can::Message& msg);
-
 	static bool
 	check_message();
 
-	static uint8_t
-	bitrate_config[8][3];
+	static constexpr uint8_t
+	bitrate_config[8][3] = {
+		// 10 kbps
+		{	0x7E,
+			0x6E,
+			0x7F
+		},
+		// 20 kbps
+		{	0x62,
+			0x0C,
+			0x37
+		},
+		// 50 kbps
+		{	0x26,
+			0x0C,
+			0x37
+		},
+		// 100 kbps
+		{	0x12,
+			0x0C,
+			0x37
+		},
+		// 125 kbps
+		{	0x0E,
+			0x0C,
+			0x37
+		},
+		// 250 kbps
+		{	0x06,
+			0x0C,
+			0x37
+		},
+		// 500 kbps
+		{	0x02,
+			0x0C,
+			0x37
+		},
+		// 1 Mbps
+		{	0x00,
+			0x0C,
+			0x36
+		}
+	};
 
 	static constexpr uint8_t CAN_ALL_FILTER = 0xff;
+
+	/// Get the index for the table lookup at compile time.
+	static constexpr uint8_t bitrate_index(Bitrate bitrate) {
+		return
+			       ( bitrate == Bitrate::kBps10)  ? 0 :
+			      (( bitrate == Bitrate::kBps20)  ? 1 :
+			     ((( bitrate == Bitrate::kBps50)  ? 2 :
+	   		    (((( bitrate == Bitrate::kBps100) ? 3 :
+			   ((((( bitrate == Bitrate::kBps125) ? 4 :
+			  (((((( bitrate == Bitrate::kBps250) ? 5 :
+			 ((((((( bitrate == Bitrate::kBps500) ? 6 :
+			(((((((( bitrate == Bitrate::MBps1)   ? 7 :
+				     0xff ))))))))))))))))))))))))))));
+	}
+
+	/// Get the value for CANBT1 at compile time.
+	static constexpr uint8_t bt1(Bitrate bitrate) {
+		return bitrate_config[bitrate_index(bitrate)][0];
+	}
+
+	/// Get the value for CANBT2 at compile time.
+	static constexpr uint8_t bt2(Bitrate bitrate) {
+		return bitrate_config[bitrate_index(bitrate)][1];
+	}
+
+	/// Get the value for CANBT3 at compile time.
+	static constexpr uint8_t bt3(Bitrate bitrate) {
+		return bitrate_config[bitrate_index(bitrate)][2];
+	}
 
 public:
 	/**
@@ -125,29 +157,29 @@ public:
 	 * 			CAN bitrate (defined in driver/connectivity/can/message.hpp)
 	 * \param interruptPriority
 	 * 			Interrupt vector priority (0=highest to 15=lowest)
-	 * \param overwriteOnOverrun
-	 * 			Once a receive FIFO is full the next incoming message
-	 * 			will overwrite the previous one if \c true otherwise
-	 * 			the incoming message will be discarded
 	 *
 	 * \warning	Has to called after connect(), but before any
 	 * 			other function from this class!
 	 */
-	template< class clockSource, uint32_t bitrate = Bitrate::kBps125,
-			uint16_t tolerance = Tolerance::OnePercent >
+	template< class SystemClock, Bitrate bitrate = Bitrate::kBps125 >
 	static void
-	initialize(	Mode startupMode = Mode::Normal,
-				bool overwriteOnOverrun = true)
+	initialize(Mode startupMode = Mode::Normal)
 	{
+		static_assert(SystemClock::Can == MHz16,
+			"Unsupported CPU frequency for CAN peripheral. "
+			"Only 16 MHz is supported at the moment");
+
+		static_assert(bitrate_index(bitrate) <= 7,
+			"Unsupported bitrate. 10, 20, 50, 100, 125, 250, 500kbps and 1Mbps" );
+
 		// switch CAN controller to reset mode
 		CANGCON |= (1 << SWRES);
 
 		// set CAN Bit Timing
 		// (see datasheet page 260)
-		uint8_t bitrate = 4; // 125 kBit
-		CANBT1 = bitrate_config[bitrate][0];
-		CANBT2 = bitrate_config[bitrate][1];
-		CANBT3 = bitrate_config[bitrate][2];
+		CANBT1 = bt1(bitrate);
+		CANBT2 = bt2(bitrate);
+		CANBT3 = bt3(bitrate);
 
 		// activate CAN transmit- and receive-interrupt
 		CANGIT = 0;
@@ -158,41 +190,17 @@ public:
 		CANTCON = 199;
 
 		// disable all filters
-		disable_filter( 0xff );
+		disableFilter( 0xff );
 
 		// activate CAN controller
-		CANGCON = (1 << ENASTB);
+		if (startupMode == Mode::ListenOnly) {
+			CANGCON = (1 << ENASTB) | (1 << LISTEN);
+		} else {
+			CANGCON = (1 << ENASTB);
+		}
 
 		return;
 	}
-
-	// ----------------------------------------------------------------------------
-	// disable mob
-	static bool
-	disable_filter(uint8_t number);
-
-
-	typedef struct
-	{
-		#if	defined(SUPPORT_EXTENDED_CANID)
-			uint32_t id;				//!< ID der Nachricht (11 oder 29 Bit)
-			uint32_t mask;				//!< Maske
-			struct {
-				uint8_t rtr : 2;		//!< Remote Request Frame
-				uint8_t extended : 2;	//!< extended ID
-			} flags;
-		#else
-			uint16_t id;				//!< ID der Nachricht 11 Bits
-			uint16_t mask;				//!< Maske
-			struct {
-				uint8_t rtr : 2;		//!< Remote Request Frame
-			} flags;
-		#endif
-	} can_filter_t;
-
-	static bool
-	set_filter(uint8_t number, const can_filter_t &filter);
-
 
 	/**
 	 * The the operating mode.
@@ -234,8 +242,7 @@ public:
 	static inline uint8_t
 	getReceiveErrorCounter()
 	{
-//		return ({{ reg }}->ESR & CAN_ESR_REC) >> 24;
-		return 0;
+		return CANREC;
 	}
 
 	/**
@@ -245,47 +252,33 @@ public:
 	static inline uint8_t
 	getTransmitErrorCounter()
 	{
-//		return ({{ reg }}->ESR & CAN_ESR_TEC) >> 16;
-		return 0;
+		return CANTEC;
 	}
 
 	static BusState
 	getBusState();
 
-	/**
-	 * Enable the error and status change interrupt.
-	 *
-	 * Can be generated by the following events:
-	 * - Error condition, for more details on error conditions please
-	 *   refer to the CAN Error Status register (CAN_ESR).
-	 * - Wakeup condition, SOF monitored on the CAN Rx signal.
-	 * - Entry into Sleep mode
-	 *
-	 * You need to create you own interrupt handler for this interrupt.
-	 * The interrupt handler has a fixed name:
-	 * \code
-	 * extern "C" void
-	 * CAN{{ id }}_SCE_IRQHandler()
-	 * {
-	 *     ...
-	 *
-	 *     // e.g. Acknowledge interrupt
-	 *     CAN{{ id }}->MSR = CAN_MSR_ERRI;
-	 * }
-	 * \endcode
-	 *
-	 * \param interruptEnable
-	 * 			Upper 24-bit of the CAN_IER register. E.g.:
-	 * 			 - CAN_IER_BOFIE
-	 * 			 - CAN_IER_EPVIE
-	 * 			 - ...
-	 * 			See Reference Manual >> bxCAN >> CAN_IER Register
-	 * \param interruptPriority
-	 * 			Interrupt vector priority (0=highest to 15=lowest)
-	 */
-	static void
-	enableStatusChangeInterrupt(uint32_t interruptEnable,
-			uint32_t interruptPriority);
+public:
+	// Acceptance filters
+
+	// ----------------------------------------------------------------------------
+	// disable mob
+	static bool
+	disableFilter(uint8_t number);
+
+	typedef struct
+	{
+		uint32_t id;				//!< ID der Nachricht (11 oder 29 Bit)
+		uint32_t mask;				//!< Maske
+		struct {
+			uint8_t rtr : 2;		//!< Remote Request Frame
+			uint8_t extended : 2;	//!< extended ID
+		} flags;
+	} can_filter_t;
+
+	static bool
+	setFilter(uint8_t number, const can_filter_t &filter);
+
 };
 
 }	// namespace at90

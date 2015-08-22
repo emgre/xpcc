@@ -37,158 +37,80 @@ static xpcc::atomic::Queue<xpcc::can::Message, {{ parameters.rx_buffer }}> rxQue
 uint8_t messages_waiting = 0;
 %% endif
 
-
+// HAL: enter standby mode => messages are not transmitted nor received
 void
-xpcc::at90::Can::disable_mob_interrupt(uint8_t mob)
+enter_standby_mode()
 {
-	if (mob < 8)
+	// request abort
+	CANGCON = (1 << ABRQ);
+
+	// wait until receiver is not busy
+	while (CANGSTA & (1 << RXBSY))
+		;
+
+	// request standby mode
+	CANGCON = 0;
+
+	// wait until the CAN Controller has entered standby mode
+	while (CANGSTA & (1 << ENFG))
+		;
+}
+
+/// HAL: leave standby mode => CAN Controller is connected to CAN Bus
+void
+leave_standby_mode()
+{
+	// save CANPAGE register
+	uint8_t canpage = CANPAGE;
+
+	// reenable all MObs
+	for (uint8_t i = 0; i < 15; i++) {
+		CANPAGE = i << 4;
+		CANCDMOB = CANCDMOB;
+	}
+
+	// restore CANPAGE
+	CANPAGE = canpage;
+
+	// request normal mode
+	CANGCON = (1 << ENASTB);
+
+	// wait until the CAN Controller has left standby mode
+	while ((CANGSTA & (1 << ENFG)) == 0)
+		;
+}
+
+/// HAL: Disable the interrupt for a specific MOb
+void
+disable_mob_interrupt(uint8_t mob)
+{
+	if (mob < 8) {
 		CANIE2 &= ~(1 << mob);
-	else
+	} else {
 		CANIE1 &= ~(1 << (mob - 8));
+	}
 }
 
+/// HAL: Enable the interrupt for a specific MOb
 void
-xpcc::at90::Can::enable_mob_interrupt(uint8_t mob)
+enable_mob_interrupt(uint8_t mob)
 {
-	if (mob < 8)
+	if (mob < 8) {
 		CANIE2 |= (1 << mob);
-	else
+	} else {
 		CANIE1 |= (1 << (mob - 8));
-}
-
-
-
-// ----------------------------------------------------------------------------
-void
-xpcc::at90::Can::setMode(Mode /* mode */)
-{
-//	// Request initialization
-//	{{ reg }}->MCR |= CAN_MCR_INRQ;
-//	while (({{ reg }}->MSR & CAN_MSR_INAK) == 0) {
-//		// Wait until the initialization mode is entered.
-//		// The CAN hardware waits until the current CAN activity (transmission
-//		// or reception) is completed before entering the initialization mode.
-//	}
-//
-//	{{ reg }}->BTR = ({{ reg }}->BTR & ~(CAN_BTR_SILM | CAN_BTR_LBKM))
-//						| static_cast<uint32_t>(mode);
-//
-//	// Leave initialization mode
-//	{{ reg }}->MCR &= ~CAN_MCR_INRQ;
-}
-
-// ----------------------------------------------------------------------------
-void
-xpcc::at90::Can::setAutomaticRetransmission(bool /* retransmission */)
-{
-//	if (retransmission) {
-//		// Enable retransmission
-//		{{ reg }}->MCR = ({{ reg }}->MCR & ~CAN_MCR_NART);
-//	} else {
-//		// Disable retransmission
-//		{{ reg }}->MCR = ({{ reg }}->MCR | CAN_MCR_NART);
-//	}
-}
-
-// ----------------------------------------------------------------------------
-bool
-xpcc::at90::Can::isMessageAvailable()
-{
-%% if parameters.rx_buffer > 0
-	return not rxQueue.isEmpty();
-%% else
-	// Check if there are any messages pending in the receive registers
-	return (messages_waiting > 0);
-%% endif
-	return false;
-}
-
-
-// ----------------------------------------------------------------------------
-bool
-xpcc::at90::Can::isReadyToSend()
-{
-%% if parameters.tx_buffer > 0
-	return (not txQueue.isFull());
-%% else
-	// check if there is any free MOb
-	return (free_buffer > 0)
-%% endif
-}
-
-
-// ----------------------------------------------------------------------------
-bool
-xpcc::at90::Can::getMessage(can::Message& message)
-{
-%% if parameters.rx_buffer > 0
-	if (rxQueue.isEmpty())
-	{
-		// no message in the receive buffer
-		return false;
 	}
-	else {
-		memcpy(&message, &rxQueue.get(), sizeof(message));
-		rxQueue.pop();
-		return true;
-	}
-%% else
-	NOT IMPLEMENTED, SEE BELOW
-%% endif
-
-// 	bool found = false;
-// 	uint8_t mob;
-
-// 	// check if there is any waiting message
-// 	if (not check_message())
-// 		return false;
-
-// 	// find the MOb with the received message
-// 	for (mob = 0; mob < 15; ++mob)
-// 	{
-// 		CANPAGE = mob << 4;
-
-// 		if (CANSTMOB & (1 << RXOK))
-// 		{
-// 			found = true;
-
-// 			// clear flags
-// 			CANSTMOB &= 0;
-// 			break;
-// 		}
-// 	}
-
-// 	if (not found) {
-// 		return false;		// should never happen
-// 	}
-
-// 	copy_mob_to_message( message );
-
-// %% if parameters.rx_buffer == 0
-// 	// mark message as processed
-// 	{
-// 		xpcc::atomic::Lock lock;
-// 		--messages_waiting;
-// 	}
-// %% endif
-
-// 	// re-enable interrupts
-// 	enable_mob_interrupt( mob );
-
-// 	// clear flags
-// 	CANCDMOB = (1 << CONMOB1) | (CANCDMOB & (1 << IDE));
-
-// 	return true;
 }
 
-
+/// HAL: Copy data from a message in RAM to the actual registers
+/// \warning this function assumes CANPAGE to be set properly before the call
 void
-xpcc::at90::Can::copy_message_to_mob(const xpcc::can::Message& msg)
+copy_message_to_mob(const xpcc::can::Message& msg)
 {
 	// write DLC (Data Length Code)
 	CANCDMOB = msg.length;
 
-	if (msg.flags.extended) {
+	if (msg.isExtended()) {
 		// extended CAN ID
 		CANCDMOB |= (1 << IDE);
 
@@ -209,7 +131,7 @@ xpcc::at90::Can::copy_message_to_mob(const xpcc::can::Message& msg)
 		CANIDT1 = (uint16_t) msg.getIdentifier() >> 3;
 	}
 
-	if (msg.flags.rtr) {
+	if (msg.isRemoteTransmitRequest()) {
 		CANIDT4 |= (1 << RTRTAG);
 	}
 	else {
@@ -220,16 +142,16 @@ xpcc::at90::Can::copy_message_to_mob(const xpcc::can::Message& msg)
 	}
 }
 
+/// HAL: Copy data from CAN registers to a message in RAM.
+/// \warning this function assumes CANPAGE to be set properly before the call
 void
-xpcc::at90::Can::copy_mob_to_message(xpcc::can::Message& msg)
+copy_mob_to_message(xpcc::can::Message& msg)
 {
 	// read status
 	uint8_t cancdmob = CANCDMOB;
 
 	// read length
 	msg.length = cancdmob & 0x0f;
-
-	#if defined(SUPPORT_EXTENDED_CANID)
 
 	if (cancdmob & (1 << IDE))
 	{
@@ -251,7 +173,7 @@ xpcc::at90::Can::copy_mob_to_message(xpcc::can::Message& msg)
 		msg->id |= (uint32_t) CANIDT1 << 21;
 		*/
 
-		msg.flags.extended = 1;
+		msg.flags.extended = true;
 	}
 	else
 	{
@@ -262,38 +184,15 @@ xpcc::at90::Can::copy_mob_to_message(xpcc::can::Message& msg)
 		id |= (uint16_t) CANIDT1 << 3;
 
 		msg.setIdentifier((uint32_t) id);
-		msg.flags.extended = 0;
+		msg.flags.extended = false;
 	}
-
-	#else
-
-	if (cancdmob & (1 << IDE))
-	{
-		// mark message as processed
-		{
-			xpcc::atomic::Lock lock;
-			messages_waiting--;
-		}
-
-		// clear flags
-		CANCDMOB = (1 << CONMOB1);
-
-		return 0;
-	}
-	else
-	{
-		// standard identifier
-		msg.id  = (uint8_t)  CANIDT2 >> 5;
-		msg.id |= (uint16_t) CANIDT1 << 3;
-	}
-
-	#endif
 
 	if (CANIDT4 & (1 << RTRTAG)) {
-		msg.flags.rtr = 1;
+		// Remote Transmission Request
+		msg.flags.rtr = true;
 	}
 	else {
-		msg.flags.rtr = 0;
+		msg.flags.rtr = false;
 
 		// read data
 		uint8_t *p = msg.data;
@@ -301,35 +200,12 @@ xpcc::at90::Can::copy_mob_to_message(xpcc::can::Message& msg)
 			*p++ = CANMSG;
 		}
 	}
-
-	#if defined(SUPPORT_TIMESTAMPS)
-	msg.timestamp = CANSTM;
-	#endif
 }
 
-
-// ----------------------------------------------------------------------------
+/// Actually copy a message to a given MOb and start transmission
 bool
-xpcc::at90::Can::check_message()
+sendMob(const xpcc::can::Message& message, const uint8_t mob)
 {
-%% if parameters.rx_buffer == 0
-	return (messages_waiting > 0);
-%% else
-	return (not rxQueue.isEmpty());
-%% endif
-}
-
-
-// ----------------------------------------------------------------------------
-bool
-xpcc::at90::Can::sendMessage(const xpcc::can::Message& message)
-{
-	// check if there is any free MOb
-	uint8_t mob = find_free_mob();
-	if (mob >= 15) {
-		return false;
-	}
-
 	// load corresponding MOb page ...
 	CANPAGE = (mob << 4);
 
@@ -358,46 +234,180 @@ xpcc::at90::Can::sendMessage(const xpcc::can::Message& message)
 }
 
 // ----------------------------------------------------------------------------
-xpcc::at90::Can::BusState
-xpcc::at90::Can::getBusState()
+void
+xpcc::at90::Can::setMode(Mode mode)
 {
-//	if ({{ reg }}->ESR & CAN_ESR_BOFF) {
-//		return BusState::Off;
-//	}
-//	else if ({{ reg }}->ESR & CAN_ESR_BOFF) {
-//		return BusState::ErrorPassive;
-//	}
-//	else if ({{ reg }}->ESR & CAN_ESR_EWGF) {
-//		return BusState::ErrorWarning;
-//	}
-//	else {
-		return BusState::Connected;
-//	}
+	if (mode == Mode::ListenOnly) {
+		CANGCON |= (1 << LISTEN);
+	} else {
+		CANGCON &= ~(1 << LISTEN);
+	}
 }
 
 // ----------------------------------------------------------------------------
 void
-xpcc::at90::Can::enableStatusChangeInterrupt(
-		uint32_t /* interruptEnable */,
-		uint32_t /* interruptPriority */)
+xpcc::at90::Can::setAutomaticRetransmission(bool retransmission)
 {
-//	NVIC_SetPriority({{ reg }}_SCE_IRQn, interruptPriority);
-//	nvicEnableInterrupt({{ reg }}_SCE_IRQn);
-//
-//	{{ reg }}->IER = interruptEnable | ({{ reg }}->IER & 0x000000ff);
+	if (retransmission) {
+		// Enable retransmission
+		CANGCON &= ~(1 << TTC);
+	} else {
+		// Disable retransmission
+		CANGCON |=  (1 << TTC);
+	}
 }
 
+// ----------------------------------------------------------------------------
+bool
+xpcc::at90::Can::isMessageAvailable()
+{
+%% if parameters.rx_buffer > 0
+	return not rxQueue.isEmpty();
+%% else
+	// Check if there are any messages pending in the receive registers
+	return (messages_waiting > 0);
+%% endif
+	return false;
+}
+
+// ----------------------------------------------------------------------------
+bool
+xpcc::at90::Can::isReadyToSend()
+{
+%% if parameters.tx_buffer > 0
+	return (not txQueue.isFull());
+%% else
+	// check if there is any free MOb
+	return (free_buffer > 0)
+%% endif
+}
+
+// ----------------------------------------------------------------------------
+bool
+xpcc::at90::Can::check_message()
+{
+%% if parameters.rx_buffer == 0
+	return (messages_waiting > 0);
+%% else
+	return (not rxQueue.isEmpty());
+%% endif
+}
+
+// ----------------------------------------------------------------------------
+bool
+xpcc::at90::Can::getMessage(can::Message& message)
+{
+%% if parameters.rx_buffer > 0
+	if (rxQueue.isEmpty())
+	{
+		// no message in the receive buffer
+		return false;
+	}
+	else {
+		memcpy(&message, &rxQueue.get(), sizeof(message));
+		rxQueue.pop();
+		return true;
+	}
+%% else
+	bool found = false;
+	uint8_t mob;
+
+	// check if there is any waiting message
+	if (not check_message())
+		return false;
+
+	// find the MOb with the received message
+	for (mob = 0; mob < 15; ++mob)
+	{
+		CANPAGE = mob << 4;
+
+		if (CANSTMOB & (1 << RXOK))
+		{
+			found = true;
+
+			// clear flags
+			CANSTMOB &= 0;
+			break;
+		}
+	}
+
+	if (not found) {
+		return false;		// should never happen
+	}
+
+	copy_mob_to_message( message );
+
+	// mark message as processed
+	{
+		xpcc::atomic::Lock lock;
+		--messages_waiting;
+	}
+
+	// re-enable interrupts
+	enable_mob_interrupt( mob );
+
+	// clear flags
+	CANCDMOB = (1 << CONMOB1) | (CANCDMOB & (1 << IDE));
+
+	return true;
+%% endif
+}
+
+// ----------------------------------------------------------------------------
+bool
+xpcc::at90::Can::sendMessage(const xpcc::can::Message& message)
+{
+	// check if there is any free MOb to bypass the queue directly
+	uint8_t mob = find_free_mob();
+	if (mob >= 15) {
+		// All MOb are used at the moment, try queue
+%% if parameters.tx_buffer > 0
+		if (not txQueue.push(message)) {
+			xpcc::ErrorReport::report(xpcc::at90::CAN_TX_OVERFLOW);
+			return false;
+		}
+		// Message successfully queued in txQueue
+		return true;
+%% else
+		// No queue and no free MOb, message discarded
+		xpcc::ErrorReport::report(xpcc::at90::CAN_TX_OVERFLOW);
+		return false;
+%% endif
+	}
+	else {
+		// At least one MOb is free. Use this to send the message immediatly
+		return sendMob(message, mob);
+	}
+
+}
+
+// ----------------------------------------------------------------------------
+xpcc::at90::Can::BusState
+xpcc::at90::Can::getBusState()
+{
+	if (CANGSTA & (1 << BOFF)) {
+		return BusState::Off;
+	}
+	else if (CANGSTA & (1 << ERRP)) {
+		return BusState::ErrorPassive;
+	}
+	else {
+		return BusState::Connected;
+	}
+}
 
 // ----------------------------------------------------------------------------
 uint8_t
 xpcc::at90::Can::find_free_mob()
 {
 	%% if parameters.tx_buffer == 0
-	if (free_buffer == 0)
+	if (free_buffer == 0) {
 		return 0xff;
+	}
 	%% elif parameters.force_tx_order
-	if (transmission_in_progress)
+	if (transmission_in_progress) {
 		return 0xff;
+	}
 	%% endif
 
 	uint8_t i;
@@ -407,8 +417,9 @@ xpcc::at90::Can::find_free_mob()
 		CANPAGE = i << 4;
 
 		// check if MOb is in use
-		if ((CANCDMOB & ((1 << CONMOB1) | (1 << CONMOB0))) == 0)
+		if ((CANCDMOB & ((1 << CONMOB1) | (1 << CONMOB0))) == 0) {
 			return i;
+		}
 	}
 
 	return 0xff;
@@ -416,7 +427,7 @@ xpcc::at90::Can::find_free_mob()
 
 // ----------------------------------------------------------------------------
 bool
-xpcc::at90::Can::disable_filter(uint8_t number)
+xpcc::at90::Can::disableFilter(uint8_t number)
 {
 	if (number > 14)
 	{
@@ -469,7 +480,7 @@ xpcc::at90::Can::disable_filter(uint8_t number)
 }
 
 bool
-xpcc::at90::Can::set_filter(uint8_t number, const can_filter_t &filter)
+xpcc::at90::Can::setFilter(uint8_t number, const can_filter_t &filter)
 {
 	if (number > 14) {
 		// it is only possible to serve a maximum of 15 filters
@@ -483,8 +494,6 @@ xpcc::at90::Can::set_filter(uint8_t number, const can_filter_t &filter)
 
 	CANSTMOB = 0;
 	CANCDMOB = 0;
-
-	#if defined(SUPPORT_EXTENDED_CANID)
 
 	if (filter.flags.extended == 0x3)
 	{
@@ -518,28 +527,15 @@ xpcc::at90::Can::set_filter(uint8_t number, const can_filter_t &filter)
 		CANIDM1 = (uint16_t) filter.mask >> 3;
 	}
 
-	#else
-
-	CANIDT4 = 0;
-	CANIDT3 = 0;
-	CANIDT2 = (uint8_t)  filter.id << 5;
-	CANIDT1 = (uint16_t) filter.id >> 3;
-
-	CANIDM4 = (1 << IDEMSK);
-	CANIDM3 = 0;
-	CANIDM2 = (uint8_t)  filter.mask << 5;
-	CANIDM1 = (uint16_t) filter.mask >> 3;
-
-	#endif
-
 	if (filter.flags.rtr & 0x2) {
 		CANIDM4 |= (1 << RTRMSK);
 
-		if (filter.flags.rtr & 0x1)
+		if (filter.flags.rtr & 0x1) {
 			CANIDT4 |= (1 << RTRMSK);		// only RTR-frames
+		}
 	}
 
-	CANCDMOB |= (1<<CONMOB1);
+	CANCDMOB |= (1 << CONMOB1);
 
 	enable_mob_interrupt(number);
 
@@ -548,52 +544,6 @@ xpcc::at90::Can::set_filter(uint8_t number, const can_filter_t &filter)
 
 	return true;
 }
-
-
-// ----------------------------------------------------------------------------
-// enter standby mode => messages are not transmitted nor received
-
-void
-xpcc::at90::Can::enter_standby_mode()
-{
-	// request abort
-	CANGCON = (1 << ABRQ);
-
-	// wait until receiver is not busy
-	while (CANGSTA & (1 << RXBSY))
-		;
-
-	// request standby mode
-	CANGCON = 0;
-
-	// wait until the CAN Controller has entered standby mode
-	while (CANGSTA & (1 << ENFG))
-		;
-}
-
-void
-xpcc::at90::Can::leave_standby_mode()
-{
-	// save CANPAGE register
-	uint8_t canpage = CANPAGE;
-
-	// reenable all MObs
-	for (uint8_t i = 0; i < 15; i++) {
-		CANPAGE = i << 4;
-		CANCDMOB = CANCDMOB;
-	}
-
-	// restore CANPAGE
-	CANPAGE = canpage;
-
-	// request normal mode
-	CANGCON = (1 << ENASTB);
-
-	// wait until the CAN Controller has left standby mode
-	while ((CANGSTA & (1 << ENFG)) == 0)
-		;
-}
-
 
 // ----------------------------------------------------------------------------
 // The CANPAGE register have to be restored after usage, otherwise it
@@ -626,15 +576,15 @@ ISR(CANIT_vect)
 			if (txQueue.isEmpty())
 			{
 				// buffer underflow => no more messages to send
-				xpcc::at90::Can::disable_mob_interrupt(mob);
+				disable_mob_interrupt(mob);
 				transmission_in_progress = false;
 			}
 			else {
-				xpcc::at90::Can::copy_message_to_mob(txQueue.get());
+				copy_message_to_mob(txQueue.get());
 				txQueue.pop();
 
 				// enable transmission
-				CANCDMOB |= (1<<CONMOB0);
+				CANCDMOB |= (1 << CONMOB0);
 			}
 %% else
 			free_buffer++;
@@ -645,8 +595,6 @@ ISR(CANIT_vect)
 			else
 				CANIE1 &= ~(1 << (mob - 8));
 %% endif
-
-			// CAN_INDICATE_TX_TRAFFIC_FUNCTION;
 		}
 		else {
 			// a message was received successfully
@@ -654,14 +602,13 @@ ISR(CANIT_vect)
 
 			// read message
 			xpcc::can::Message msg;
-			xpcc::at90::Can::copy_mob_to_message( msg );
+			copy_mob_to_message(msg);
 
 			// push it to the list
 
 			if (not rxQueue.push(msg)) {
 				// buffer overflow => reject message
-				// FIXME inform the user
-				// xpcc::ErrorReport::report(xpcc::stm32::CAN{{ id }}_FIFO1_OVERFLOW);
+				xpcc::ErrorReport::report(xpcc::at90::CAN{{ id }}_QUEUE_OVERFLOW);
 			}
 
 			// clear flags
@@ -676,8 +623,6 @@ ISR(CANIT_vect)
 			else
 				CANIE1 &= ~(1 << (mob - 8));
 %% endif
-
-			// CAN_INDICATE_RX_TRAFFIC_FUNCTION;
 		}
 
 		// restore MOb page register
@@ -696,47 +641,3 @@ ISR(OVRIT_vect)
 {
 
 }
-
-uint8_t
-xpcc::at90::Can::bitrate_config[8][3] = {
-	// 10 kbps
-	{	0x7E,
-		0x6E,
-		0x7F
-	},
-	// 20 kbps
-	{	0x62,
-		0x0C,
-		0x37
-	},
-	// 50 kbps
-	{	0x26,
-		0x0C,
-		0x37
-	},
-	// 100 kbps
-	{	0x12,
-		0x0C,
-		0x37
-	},
-	// 125 kbps
-	{	0x0E,
-		0x0C,
-		0x37
-	},
-	// 250 kbps
-	{	0x06,
-		0x0C,
-		0x37
-	},
-	// 500 kbps
-	{	0x02,
-		0x0C,
-		0x37
-	},
-	// 1 Mbps
-	{	0x00,
-		0x0C,
-		0x36
-	}
-};

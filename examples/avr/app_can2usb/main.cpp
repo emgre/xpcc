@@ -10,7 +10,7 @@
 /**
  * CAN2USB Hardware Revision 1.3
  *
- * An AT90CAN128 and FT245 based CAN sniffer.
+ * An AT90CAN128 and FT245 based CAN bus sniffer.
  *
  * AT90CAN128 fuse settings:
  *
@@ -54,7 +54,6 @@ typedef GpioOutputG0  WrInverted;
 
 typedef xpcc::GpioInverted<WrInverted> Wr;
 
-
 typedef xpcc::Ft245<myPort, Rd, Wr, Rxf, Txe> MyFt;
 MyFt myFt;
 
@@ -69,7 +68,6 @@ xpcc::log::Logger xpcc::log::error(loggerDevice);
 // Set the log level
 #undef	XPCC_LOG_LEVEL
 #define	XPCC_LOG_LEVEL xpcc::log::DEBUG
-
 
 MAIN_FUNCTION
 {
@@ -93,7 +91,6 @@ MAIN_FUNCTION
 	Led4High::set();
 	Led5Low::set();
 
-
 	Rd::setOutput(xpcc::Gpio::High);
 	WrInverted::setOutput(xpcc::Gpio::Low);
 
@@ -105,9 +102,8 @@ MAIN_FUNCTION
 	XPCC_LOG_ERROR   << "error"   << xpcc::endl;
 
 	xpcc::at90::Can::initialize<xpcc::avr::SystemClock>();
-	xpcc::at90::Can::can_filter_t filter = {0x000, 0x000};
-	xpcc::at90::Can::set_filter(0, filter);
-
+	xpcc::at90::Can::can_filter_t filter = {0x000, 0x000, false, false};
+	xpcc::at90::Can::setFilter(0, filter);
 
 	while (1)
 	{
@@ -119,8 +115,6 @@ MAIN_FUNCTION
 		LedTxLow::toggle();
 		Led4Low::toggle();
 		Led4High::toggle();
-
-		XPCC_LOG_DEBUG << "First free mob = " << xpcc::at90::Can::find_free_mob() << xpcc::endl;
 
 		// Create a new message
 		// xpcc::can::Message message(0x22);
