@@ -134,7 +134,7 @@ public:
 	}
 
 	/**
-	 * The the operating mode.
+	 * Set the operating mode.
 	 *
 	 * Default after initialization is the normal mode.
 	 */
