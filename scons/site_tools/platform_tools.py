@@ -101,6 +101,15 @@ def platform_tools_find_device_file(env):
 				if id.name in names and id.pin_id in pins and id.size_id in sizes:
 					device_file = os.path.join(xml_path, file)
 					break
+
+	elif id.platform == 'msp432':
+		for file in os.listdir(xml_path):
+			if 'msp432'+id.family+id.name in file:
+				sizes = file.replace('msp432'+id.family+id.name,'').replace('.xml','').split('_')
+				if id.size_id in sizes:
+					device_file = os.path.join(xml_path, file)
+					break
+
 	else:
 		temp_device = device
 		while temp_device != None and len(temp_device) > 0:
@@ -397,6 +406,9 @@ def generate(env, **kw):
 	def test_is_avr(target):
 		return test_platform(target, 'avr')
 	env.AddTemplateJinja2Test('avr', test_is_avr)
+	def test_is_msp432(target):
+		return test_platform(target, 'msp432')
+	env.AddTemplateJinja2Test('msp432', test_is_msp432)
 
 	# STM32 Family Test
 	def test_is_stm32f0(target):

@@ -1,0 +1,70 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE rca SYSTEM "../devicefile.dtd">
+<rca version="1.0">
+  <device platform="msp432" family="p40" name="1" size_id="m|r">
+    <naming-schema>{{ platform }}{{ family }}{{ name }}{{ size_id }}</naming-schema>
+    <flash device-size-id="m">131072</flash>
+    <flash device-size-id="r">262144</flash>
+    <ram device-size-id="m">32768</ram>
+    <ram device-size-id="r">65536</ram>
+    <core>cortex-m4f</core>
+    <pin-count>84</pin-count>
+    <header>msp432.h</header>
+    <define>NO_MSP_CLASSIC_DEFINES</define>
+    <define device-size-id="m">__MSP432P401M__</define>
+    <define device-size-id="r">__MSP432P401R__</define>
+    <driver type="core" name="cortex">
+      <parameter name="vector_table_in_ram">true</parameter>
+      <memory device-size-id="m" access="rx" start="0x0000000" name="flash" size="128"/>
+      <memory device-size-id="r" access="rx" start="0x0000000" name="flash" size="256"/>
+      <memory device-size-id="m" access="rwx" start="0x0000000" name="sram1" size="32"/>
+      <memory device-size-id="r" access="rwx" start="0x0000000" name="sram1" size="64"/>
+      <vector position="0" name="PSS"/>
+      <vector position="1" name="CS"/>
+      <vector position="2" name="PCM"/>
+      <vector position="3" name="WDT"/>
+      <vector position="4" name="FPU"/>
+      <vector position="5" name="FLCTL"/>
+      <vector position="6" name="COMP_E0"/>
+      <vector position="7" name="COMP_E1"/>
+      <vector position="8" name="TA0_0"/>
+      <vector position="9" name="TA0_N"/>
+      <vector position="10" name="TA1_0"/>
+      <vector position="11" name="TA1_N"/>
+      <vector position="12" name="TA2_0"/>
+      <vector position="13" name="TA2_N"/>
+      <vector position="14" name="TA3_0"/>
+      <vector position="15" name="TA3_N"/>
+      <vector position="16" name="EUSCIA0"/>
+      <vector position="17" name="EUSCIA1"/>
+      <vector position="18" name="EUSCIA2"/>
+      <vector position="19" name="EUSCIA3"/>
+      <vector position="20" name="EUSCIB0"/>
+      <vector position="21" name="EUSCIB1"/>
+      <vector position="22" name="EUSCIB2"/>
+      <vector position="23" name="EUSCIB3"/>
+      <vector position="24" name="ADC14"/>
+      <vector position="25" name="T32_INT1"/>
+      <vector position="26" name="T32_INT2"/>
+      <vector position="27" name="T32_INTC"/>
+      <vector position="28" name="AES256"/>
+      <vector position="29" name="RTC_C"/>
+      <vector position="30" name="DMA_ERR"/>
+      <vector position="31" name="DMA_INT3"/>
+      <vector position="32" name="DMA_INT2"/>
+      <vector position="33" name="DMA_INT1"/>
+      <vector position="34" name="DMA_INT0"/>
+      <vector position="35" name="PORT1"/>
+      <vector position="36" name="PORT2"/>
+      <vector position="37" name="PORT3"/>
+      <vector position="38" name="PORT4"/>
+      <vector position="39" name="PORT5"/>
+      <vector position="40" name="PORT6"/>
+    </driver>
+    <driver type="clock" name="msp432"/>
+    <driver type="gpio" name="msp432">
+      <gpio port="1" id="0"/>
+      <gpio port="1" id="1"/>
+    </driver>
+  </device>
+</rca>

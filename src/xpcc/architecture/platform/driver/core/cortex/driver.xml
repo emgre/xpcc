@@ -28,6 +28,8 @@
 
 		<!-- lpc -->
 		<template device-platform="lpc" out="linkerscript.ld">linkerscript/stm32_ram.ld.in</template>
+		<!-- msp432 -->
+		<template device-platform="msp432" out="linkerscript.ld">linkerscript/stm32_ram.ld.in</template>
 		<!-- stm32f0, stm32f1, stm32f2 -->
 		<template device-family="f0|f1|f2" out="linkerscript.ld">linkerscript/stm32_ram.ld.in</template>
 		<!-- stm32f3 -->

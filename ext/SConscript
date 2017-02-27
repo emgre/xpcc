@@ -73,6 +73,11 @@ if env['XPCC_DEVICE'].startswith('lpc11'):
 	globalIncludes += ['nxp/lpc11xx/Include']
 
 # -----------------------------------------------------------------------------
+# Add the TI device header files
+if env['XPCC_DEVICE'].startswith('msp432'):
+	globalIncludes += ['ti/msp432/Include']
+
+# -----------------------------------------------------------------------------
 if 'stm32f' in env['XPCC_DEVICE'] and not env['XPCC_DEVICE'].startswith('stm32f0'):
 	sourcePath += ['freertos']		# FreeRTOS for STM32
 	sourcePath += ['fatfs']			# FatFS

@@ -11,6 +11,7 @@ Libraries
 - `freertos`: modified v7.0.1 without own fork (sadly)
 - `nxp`: LPC CMSIS device headers + drivers (search on lpcware.com/downloads)
 - `st`: STM32 CMSIS device headers extracted from Cube libraries
+- `ti`: Texas Instruments device headers
 
 See the Readme inside each library folder for additional information including license.
 

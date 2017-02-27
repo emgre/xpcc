@@ -58,6 +58,11 @@
 	PWR->CR1 |= PWR_CR1_DBP;
 	// Enable Data Tighly Coupled Memory (DTCM) and backup SRAM (BKPSRAM)
 	RCC->AHB1ENR |= RCC_AHB1ENR_DTCMRAMEN | RCC_AHB1ENR_BKPSRAMEN;
+%% elif target is msp432
+	// Halt the watchdog
+	WDT_A->CTL = WDT_A_CTL_PW | WDT_A_CTL_HOLD;
+	// Enable all SRAM banks
+	SYSCTL->SRAM_BANKEN = SYSCTL_SRAM_BANKEN_BNK7_EN;
 %% endif
 
 %% endmacro

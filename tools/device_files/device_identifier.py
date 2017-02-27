@@ -94,6 +94,14 @@ class DeviceIdentifier:
 			if len(string) >= 9:
 				self.valid = True
 
+		elif string.startswith('msp432'):
+			self.platform = "msp432"
+			self.family = string[6:9]
+			self.name = string[9]
+			self.size_id = string[10]
+			if len(string) >= 11:
+				self.valid = True
+
 		# AVR platform with AT90, ATtiny, ATmega and ATxmega family
 		elif string.startswith('at'):
 			self.platform = "avr"
