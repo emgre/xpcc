@@ -15,10 +15,10 @@
     <define device-size-id="r">__MSP432P401R__</define>
     <driver type="core" name="cortex">
       <parameter name="vector_table_in_ram">true</parameter>
-      <memory device-size-id="m" access="rx" start="0x0000000" name="flash" size="128"/>
-      <memory device-size-id="r" access="rx" start="0x0000000" name="flash" size="256"/>
-      <memory device-size-id="m" access="rwx" start="0x0000000" name="sram1" size="32"/>
-      <memory device-size-id="r" access="rwx" start="0x0000000" name="sram1" size="64"/>
+      <memory device-size-id="m" access="rx" start="0x00000000" name="flash" size="128"/>
+      <memory device-size-id="r" access="rx" start="0x00000000" name="flash" size="256"/>
+      <memory device-size-id="m" access="rw" start="0x20000000" name="sram1" size="32"/>
+      <memory device-size-id="r" access="rw" start="0x20000000" name="sram1" size="64"/>
       <vector position="0" name="PSS"/>
       <vector position="1" name="CS"/>
       <vector position="2" name="PCM"/>

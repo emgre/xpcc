@@ -1,6 +1,6 @@
 /******************************************************************************
 *
-* Copyright (C) 2012 - 2016 Texas Instruments Incorporated - http://www.ti.com/ 
+* Copyright (C) 2012 - 2017 Texas Instruments Incorporated - http://www.ti.com/ 
 *
 * Redistribution and use in source and binary forms, with or without 
 * modification, are permitted provided that the following conditions 
@@ -32,7 +32,7 @@
 *
 * MSP432 Family Generic Include File
 *
-* File creation date: 2016-10-05
+* File creation date: 02/14/17
 *
 ******************************************************************************/
 
